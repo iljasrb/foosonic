@@ -28,7 +28,20 @@ Legend: ✅ tested, ⬜ untested/unsure.
 | Layout widget (Internet category) | ⬜ |
 | Track metadata + cover art | ⬜ |
 
-## Build
+## Install
+
+Download `fyplugin_foosonic.so` from the
+[Releases](https://github.com/iljasrb/foosonic/releases) page (pre-release builds), then drop it
+into fooyin's plugin directory:
+
+```sh
+mkdir -p ~/.local/lib/fooyin/plugins
+cp fyplugin_foosonic.so ~/.local/lib/fooyin/plugins/
+```
+
+Restart fooyin, then open **View → Foosonic Browser**.
+
+## Build from source
 
 Requires fooyin development files (headers + `FooyinConfig.cmake`) and Qt 6.
 
@@ -37,17 +50,8 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-## Install
-
-Per-user, no root:
-
-```sh
-mkdir -p ~/.local/lib/fooyin/plugins
-cp build/fyplugin_foosonic.so ~/.local/lib/fooyin/plugins/
-```
-
-Or system-wide with `sudo cmake --install build`. Restart fooyin, then open
-**View → Foosonic Browser**.
+Then copy `build/fyplugin_foosonic.so` as above, or install system-wide with
+`sudo cmake --install build`.
 
 ## Usage
 
