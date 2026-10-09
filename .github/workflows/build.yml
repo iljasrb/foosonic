@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # fooyin's dev files (headers + FooyinConfig.cmake + libs) are only packaged on Arch,
+    # so build inside an Arch container rather than building fooyin from source on Ubuntu.
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm --needed \
+            base-devel cmake ninja git ca-certificates qt6-base qt6-svg fooyin
+
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: fyplugin_foosonic
+          path: build/fyplugin_foosonic.so
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/fyplugin_foosonic.so
