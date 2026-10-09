@@ -15,7 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     # fooyin's dev files (headers + FooyinConfig.cmake + libs) are only packaged on Arch,
     # so build inside an Arch container rather than building fooyin from source on Ubuntu.
-    container: archlinux:latest
+    # Use Google's Docker Hub mirror: GitHub runners share IPs and hit Docker Hub's
+    # anonymous pull rate limit on archlinux:latest.
+    container: mirror.gcr.io/library/archlinux:latest
     steps:
       - name: Install build dependencies
         run: |
