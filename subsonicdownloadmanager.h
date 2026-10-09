@@ -1,0 +1,131 @@
+/*
+ * Fooyin Subsonic plugin
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+#pragma once
+
+#include <QJsonObject>
+#include <QList>
+#include <QObject>
+#include <QStringList>
+
+#include <functional>
+#include <map>
+#include <memory>
+#include <set>
+#include <vector>
+
+class QFile;
+class QNetworkReply;
+
+namespace Fooyin {
+class NetworkAccessManager;
+class PlayerController;
+class PlaylistHandler;
+class SettingsManager;
+class Track;
+
+namespace Subsonic {
+class SubsonicClient;
+
+/*!
+ * Fetches Subsonic tracks into a local cache in the background.
+ *
+ * Playlist entries start as remote stream URLs (always playable) and are promoted to the cached
+ * local file once downloaded so they become seekable. Downloads are limited to playback order
+ * (current + a configurable number ahead), hidden, and retried with an HTTP Range header so
+ * servers/proxies that cut long-lived streams don't stop them.
+ */
+class SubsonicDownloadManager : public QObject
+{
+    Q_OBJECT
+
+public:
+    enum class CacheState : uint8_t
+    {
+        NotCached = 0,
+        Downloading,
+        Cached,
+    };
+    Q_ENUM(CacheState)
+
+    SubsonicDownloadManager(std::shared_ptr<NetworkAccessManager> network, SettingsManager* settings,
+                            PlayerController* player, PlaylistHandler* handler, QObject* parent = nullptr);
+
+    /*!
+     * Registers @p songs for caching. @p urls are the remote stream URLs used for the corresponding
+     * playlist entries. Returns the local cache paths.
+     */
+    QStringList registerSongs(const QList<QJsonObject>& songs, const QStringList& urls, const QString& dir);
+
+    /*! Ensures the track with @p songId is cached, calling @p onDone when it is (or fails). */
+    void ensureDownloaded(const QString& songId, std::function<void(bool)> onDone = {});
+
+    [[nodiscard]] CacheState cacheStateForSong(const QString& songId) const;
+    [[nodiscard]] int downloadProgressForSong(const QString& songId) const;
+    [[nodiscard]] QString activeDownloadName() const;
+    [[nodiscard]] int activeDownloadProgress() const;
+    [[nodiscard]] qint64 cacheSizeBytes() const;
+    [[nodiscard]] int cachedCount() const;
+
+    /*! Deletes every cached file not currently playing. */
+    void clearCache();
+
+Q_SIGNALS:
+    void cacheStateChanged(const QString& songId);
+    void downloadProgressChanged();
+
+private:
+    struct Entry
+    {
+        QJsonObject song;
+        QString url;
+        QString path;
+        bool done{false};
+    };
+
+    void onCurrentTrackChanged(const Track& track);
+    void tryApplyPendingSeek();
+    void request(int index, bool priority = false);
+    void processNext();
+    void startRequest();
+    void handleReadyRead();
+    void handleFinished();
+    void finishCurrent(bool ok);
+    void promoteEntryToLocal(int index);
+    void evictCacheIfNeeded();
+    [[nodiscard]] Track trackForEntry(const Entry& entry) const;
+    [[nodiscard]] int indexForPath(const QString& path) const;
+    [[nodiscard]] int indexForSongId(const QString& songId) const;
+    [[nodiscard]] int registerRemoteTrack(const Track& track);
+    [[nodiscard]] QString pathForSong(const QJsonObject& song, const QString& dir) const;
+
+    std::shared_ptr<NetworkAccessManager> m_network;
+    SettingsManager* m_settings;
+    SubsonicClient* m_client;
+    PlayerController* m_player;
+    PlaylistHandler* m_handler;
+    QString m_dir;
+    std::vector<Entry> m_entries;
+    std::set<int> m_requests;
+    std::map<int, std::function<void(bool)>> m_callbacks;
+    int m_active{-1};
+    int m_priority{-1};
+    int m_gateIndex{-1};
+    uint64_t m_pendingSeekPosition{0};
+    QString m_pendingSeekPath;
+
+    QFile* m_file{nullptr};
+    QNetworkReply* m_reply{nullptr};
+    qint64 m_received{0};
+    qint64 m_requestStart{0};
+    qint64 m_total{-1};
+    int m_attempts{0};
+    bool m_rangeChecked{false};
+    bool m_sentRange{false};
+    qint64 m_lastProgressEmit{0};
+};
+} // namespace Subsonic
+} // namespace Fooyin
